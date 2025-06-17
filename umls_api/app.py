@@ -66,6 +66,38 @@ def clean_html(html_text):
     """Remove HTML tags from text."""
     return BeautifulSoup(html_text, "html.parser").get_text() if html_text else None
 
+
+@app.get("/hpo_to_cui/{hpo_code}")
+async def get_cui_from_hpo(hpo_code: str):
+    try:
+        conn = await connect_db()
+        async with conn.cursor(aiomysql.DictCursor) as cursor:
+            await cursor.execute("""
+                SELECT CUI 
+                FROM MRCONSO 
+                WHERE CODE = %s 
+                AND SAB = 'HPO' 
+                LIMIT 1
+            """, (hpo_code,))
+            result = await cursor.fetchone()
+
+            if not result:
+                raise HTTPException(status_code=404, detail="CUI not found for the given HPO code")
+
+            return {
+                "hpo_code": hpo_code,
+                "cui": result["CUI"]
+            }
+
+    except Exception as e:
+        logging.error(f"Error getting CUI from HPO: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+    finally:
+        if 'conn' in locals():
+            conn.close()
+
+
 @app.get("/terms")
 async def search_terms(search: str, ontology: str = "HPO"):
     """Search for medical terms in UMLS based on ontology."""
