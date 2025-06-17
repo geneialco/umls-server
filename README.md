@@ -276,12 +276,17 @@ The MCP server provides these tools to Claude Desktop:
 | `GET`  | `/cuis/{cui1}/{cui2}/lca` | Get the lowest common ancestor (LCA) of two CUIs |
 | `GET`  | `/cuis/{cui1}/{cui2}/similarity/wu-palmer` | Compute Wu-Palmer similarity between two CUIs |
 | `GET`  | `/cuis/{cui}/hpo` | Retrieve HPO code from CUI |
+| `GET`  | `/hpo_to_cui/{hpo_code}` | Retrieve CUI from HPO code |
 
 ### Endpoint Descriptions
 
 #### Search for Terms
 `GET /terms?search={term}&ontology={ontology}`
 - Searches for a term in the specified ontology (default: `HPO`).
+
+#### Search for CUI by HPO code
+`GET /hpo_to_cui/{hpo_code}`
+- Searches for CUI by HPO code.
 
 #### Search for CUIs by Term
 `GET /cuis?query={term}`
