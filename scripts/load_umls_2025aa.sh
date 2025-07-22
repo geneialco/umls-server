@@ -107,21 +107,23 @@ echo "🚀 Starting UMLS data loading using official scripts..."
 # Step 1: Copy RRF files to container data directory
 echo ""
 echo -e "${BLUE}📁 Preparing data files in container...${NC}"
+# Copy RRF files and subdirectories to container
+echo -n "   Copying RRF files and subdirectories to container... "
 docker exec $CONTAINER_NAME mkdir -p /tmp/umls_data &>/dev/null
-
-# Copy all RRF files to container
 for file in "$UMLS_DATA_DIR"/*.RRF; do
     if [ -f "$file" ]; then
         filename=$(basename "$file")
-        echo -n "   Copying $filename... "
-        if docker cp "$file" "$CONTAINER_NAME:/tmp/umls_data/$filename" &>/dev/null; then
-            echo -e "${GREEN}✅${NC}"
-        else
-            echo -e "${RED}❌${NC}"
-            exit 1
-        fi
+        docker cp "$file" "$CONTAINER_NAME:/tmp/umls_data/$filename" &>/dev/null
     fi
 done
+# Copy all subdirectories (e.g., CHANGE) recursively
+for dir in "$UMLS_DATA_DIR"/*/; do
+    if [ -d "$dir" ]; then
+        dirname=$(basename "$dir")
+        docker cp "$dir" "$CONTAINER_NAME:/tmp/umls_data/$dirname" &>/dev/null
+    fi
+done
+echo -e "${GREEN}✅${NC}"
 
 # Create empty MRCXT.RRF if it doesn't exist (required by mysql_tables.sql)
 docker exec $CONTAINER_NAME touch /tmp/umls_data/MRCXT.RRF &>/dev/null
@@ -139,6 +141,12 @@ docker exec $CONTAINER_NAME bash -c "
     sed 's/@LINE_TERMINATION@/\"\\\\n\"/g' /tmp/mysql_tables_original.sql > /tmp/mysql_tables.sql
     rm /tmp/mysql_tables_original.sql
 " &>/dev/null
+
+# Copy the official SQL files into the container
+docker cp "$UMLS_DATA_DIR/mysql_tables.sql" $CONTAINER_NAME:/tmp/mysql_tables.sql
+if [ -f "$UMLS_DATA_DIR/mysql_indexes.sql" ]; then
+    docker cp "$UMLS_DATA_DIR/mysql_indexes.sql" $CONTAINER_NAME:/tmp/mysql_indexes.sql
+fi
 
 # Execute the official script from the data directory
 if docker exec $CONTAINER_NAME bash -c "
