@@ -192,9 +192,7 @@ async def list_tools():
             }
         )
     ]
-    tool_dicts = [tool.model_dump() for tool in tools]
-    print("[STDERR DEBUG] list_tools JSON:", json.dumps(tool_dicts, indent=2), file=sys.stderr)
-    return tool_dicts
+    return tools
 
 @server.call_tool()
 async def call_tool(name: str, arguments: Dict[str, Any]) -> Any:
