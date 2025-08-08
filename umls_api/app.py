@@ -145,9 +145,9 @@ async def get_ancestors(cui: str):
     try:
         conn = await connect_db()
         async with conn.cursor() as cursor:
-            # Step 1: Retrieve the AUI paths (PTR) from MRHIER
-            logging.info(f"Fetching PTR paths for CUI {cui}")
-            await cursor.execute("SELECT PTR FROM MRHIER WHERE CUI = %s", (cui,))
+            # Step 1: Retrieve the AUI paths (PTR) from MRHIER using SNOMEDCT_US
+            logging.info(f"Fetching PTR paths for CUI {cui} from SNOMEDCT_US")
+            await cursor.execute("SELECT PTR FROM MRHIER WHERE CUI = %s AND SAB = 'SNOMEDCT_US'", (cui,))
             results = await cursor.fetchall()
             logging.info(f"Found {len(results)} PTR paths for CUI {cui}")
 
@@ -167,10 +167,10 @@ async def get_ancestors(cui: str):
                 logging.info(f"No AUIs found in PTR paths for CUI {cui}")
                 return {"cui": cui, "ancestors": []}  # No ancestors found
 
-            # Step 3: Map AUIs to CUIs using MRCONSO
-            logging.info(f"Mapping {len(auis)} AUIs to CUIs")
+            # Step 3: Map AUIs to CUIs using MRCONSO (filtered to SNOMEDCT_US)
+            logging.info(f"Mapping {len(auis)} AUIs to CUIs from SNOMEDCT_US")
             await cursor.execute("""
-                SELECT DISTINCT AUI, CUI FROM MRCONSO WHERE AUI IN %s
+                SELECT DISTINCT AUI, CUI FROM MRCONSO WHERE AUI IN %s AND SAB = 'SNOMEDCT_US'
             """, (tuple(auis),))
             mappings = await cursor.fetchall()
             logging.info(f"Found {len(mappings)} AUI to CUI mappings")
@@ -198,7 +198,7 @@ async def get_cui_info(cui: str):
             await cursor.execute("""
                 SELECT CUI, STR 
                 FROM MRCONSO 
-                WHERE CUI = %s 
+                WHERE CUI = %s AND SAB = 'SNOMEDCT_US'
                 LIMIT 1
             """, (cui,))
             result = await cursor.fetchone()
@@ -226,7 +226,7 @@ async def search_cui(query: str = Query(..., description="Search term for CUI lo
             await cursor.execute("""
                 SELECT CUI, STR 
                 FROM MRCONSO 
-                WHERE STR LIKE %s 
+                WHERE STR LIKE %s AND SAB = 'SNOMEDCT_US'
                 LIMIT 50
             """, (f"%{query}%",))
             results = await cursor.fetchall()
@@ -250,18 +250,18 @@ async def get_depth(cui: str):
     try:
         conn = await connect_db()
         async with conn.cursor() as cursor:
-            # Get the maximum depth from MRHIER table
+            # Get the minimum depth from MRHIER table using SNOMEDCT_US vocabulary
             await cursor.execute("""
-                SELECT MAX(LENGTH(PTR) - LENGTH(REPLACE(PTR, '.', '')) + 1) as max_depth
+                SELECT MIN(LENGTH(PTR) - LENGTH(REPLACE(PTR, '.', '')) + 1) as min_depth
                 FROM MRHIER
-                WHERE CUI = %s
+                WHERE CUI = %s AND SAB = 'SNOMEDCT_US'
             """, (cui,))
             result = await cursor.fetchone()
             
-            if not result or result["max_depth"] is None:
-                raise HTTPException(status_code=404, detail="Depth not found")
+            if not result or result["min_depth"] is None:
+                raise HTTPException(status_code=404, detail=f"Depth not found for CUI {cui} in SNOMEDCT_US hierarchy. This concept may not have hierarchical relationships in the formal medical taxonomy.")
                 
-            return {"cui": cui, "depth": result["max_depth"]}
+            return {"cui": cui, "depth": result["min_depth"]}
     except Exception as e:
         logging.error(f"Error getting depth: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -294,9 +294,15 @@ async def wu_palmer_similarity(cui1: str, cui2: str):
 
     if depth_c1["depth"] == 0 or depth_c2["depth"] == 0:
         logging.error("One or both CUIs have no valid depth")
-        raise HTTPException(status_code=400, detail="One or both CUIs have no valid depth")
+        raise HTTPException(status_code=400, detail="One or both CUIs have no valid depth in SNOMEDCT_US hierarchy. These concepts may not be part of the formal medical hierarchy.")
 
-    similarity = (2 * depth_lca["depth"]) / (depth_c1["depth"] + depth_c2["depth"])
+    # Validate that LCA depth is less than or equal to both constituent depths
+    if depth_lca["depth"] > depth_c1["depth"] or depth_lca["depth"] > depth_c2["depth"]:
+        logging.error("LCA depth (%s) is greater than constituent depths (%s, %s)", 
+                     depth_lca["depth"], depth_c1["depth"], depth_c2["depth"])
+        raise HTTPException(status_code=500, detail="Invalid hierarchy: LCA depth exceeds constituent depths")
+
+    similarity = (2 * depth_lca["depth"]) / (depth_c1["depth"] + depth_c2["depth"] + depth_lca["depth"])
     logging.info("Computed Wu-Palmer similarity: %s", similarity)
 
     return {
@@ -321,13 +327,54 @@ async def find_lowest_common_ancestor(cui1: str, cui2: str):
         
         ancestors1 = set(ancestors1_response.get("ancestors", []))
         ancestors2 = set(ancestors2_response.get("ancestors", []))
-        common_ancestors = ancestors1 & ancestors2
+        
+        # Check if one concept is an ancestor of the other
+        if cui1 in ancestors2:
+            # cui1 is an ancestor of cui2, so cui1 is the LCA
+            logging.info(f"{cui1} is an ancestor of {cui2}, making it the LCA")
+            try:
+                depth_response = await get_depth(cui1)
+                return {"cui1": cui1, "cui2": cui2, "lca": cui1, "depth": depth_response["depth"]}
+            except HTTPException:
+                raise HTTPException(status_code=404, detail=f"{cui1} not found in SNOMEDCT_US hierarchy")
+        
+        if cui2 in ancestors1:
+            # cui2 is an ancestor of cui1, so cui2 is the LCA
+            logging.info(f"{cui2} is an ancestor of {cui1}, making it the LCA")
+            try:
+                depth_response = await get_depth(cui2)
+                return {"cui1": cui1, "cui2": cui2, "lca": cui2, "depth": depth_response["depth"]}
+            except HTTPException:
+                raise HTTPException(status_code=404, detail=f"{cui2} not found in SNOMEDCT_US hierarchy")
+        
+        # Exclude the original CUIs from being considered as their own ancestors
+        common_ancestors = (ancestors1 & ancestors2) - {cui1, cui2}
         logging.info("Common ancestors: %s", common_ancestors)
 
         if not common_ancestors:
-            raise HTTPException(status_code=404, detail="No common ancestor found")
+            # Check if both concepts exist in SNOMEDCT_US hierarchy
+            try:
+                await get_depth(cui1)
+                cui1_in_hierarchy = True
+            except HTTPException:
+                cui1_in_hierarchy = False
+                
+            try:
+                await get_depth(cui2)
+                cui2_in_hierarchy = True
+            except HTTPException:
+                cui2_in_hierarchy = False
+            
+            if not cui1_in_hierarchy and not cui2_in_hierarchy:
+                raise HTTPException(status_code=404, detail="Both concepts lack hierarchical relationships in SNOMEDCT_US. These concepts exist in the terminology but are not part of the formal medical hierarchy.")
+            elif not cui1_in_hierarchy:
+                raise HTTPException(status_code=404, detail=f"Concept {cui1} lacks hierarchical relationships in SNOMEDCT_US. This concept exists in the terminology but is not part of the formal medical hierarchy.")
+            elif not cui2_in_hierarchy:
+                raise HTTPException(status_code=404, detail=f"Concept {cui2} lacks hierarchical relationships in SNOMEDCT_US. This concept exists in the terminology but is not part of the formal medical hierarchy.")
+            else:
+                raise HTTPException(status_code=404, detail="No common ancestor found in SNOMEDCT_US hierarchy. These concepts may be too distantly related or belong to different medical domains.")
 
-        # Fetch depths for each common ancestor
+        # Fetch depths for each common ancestor (all are now from SNOMEDCT_US)
         depth_dict = {}
         for ancestor in common_ancestors:
             try:
@@ -340,7 +387,7 @@ async def find_lowest_common_ancestor(cui1: str, cui2: str):
         if not depth_dict:
             raise HTTPException(status_code=404, detail="Unable to compute depths for common ancestors")
 
-        # Determine the LCA as the ancestor with the maximum depth
+        # Determine the LCA as the ancestor with the maximum depth (most specific common ancestor)
         lca = max(depth_dict.items(), key=lambda x: x[1])[0]
         logging.info("Lowest common ancestor for %s and %s is %s", cui1, cui2, lca)
         return {"cui1": cui1, "cui2": cui2, "lca": lca, "depth": depth_dict[lca]}
