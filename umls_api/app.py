@@ -395,6 +395,78 @@ async def find_lowest_common_ancestor(cui1: str, cui2: str):
         logging.error("Error finding LCA: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/cuis/{cui1}/{cui2}/relationships", summary="Get relationships between two CUIs")
+async def get_relationships(cui1: str, cui2: str, sab: str = Query(None, description="Source vocabulary (e.g., 'SNOMEDCT_US', 'HPO'). If not specified, returns relationships from all sources.")):
+    """Get all relationships between two given CUIs from the MRREL table."""
+    try:
+        conn = await connect_db()
+        async with conn.cursor() as cursor:
+            # Build the query based on whether SAB is specified
+            if sab:
+                query = """
+                    SELECT r.CUI1, r.CUI2, r.REL, r.RELA, r.SAB, r.SL, r.DIR, r.SUPPRESS,
+                           c1.STR as CUI1_NAME, c2.STR as CUI2_NAME
+                    FROM MRREL r
+                    JOIN MRCONSO c1 ON r.CUI1 = c1.CUI AND c1.SAB = r.SAB
+                    JOIN MRCONSO c2 ON r.CUI2 = c2.CUI AND c2.SAB = r.SAB
+                    WHERE (r.CUI1 = %s AND r.CUI2 = %s) OR (r.CUI1 = %s AND r.CUI2 = %s)
+                    AND r.SAB = %s
+                    ORDER BY r.RELA, r.SAB
+                """
+                params = (cui1, cui2, cui2, cui1, sab)
+            else:
+                query = """
+                    SELECT r.CUI1, r.CUI2, r.REL, r.RELA, r.SAB, r.SL, r.DIR, r.SUPPRESS,
+                           c1.STR as CUI1_NAME, c2.STR as CUI2_NAME
+                    FROM MRREL r
+                    JOIN MRCONSO c1 ON r.CUI1 = c1.CUI AND c1.SAB = r.SAB
+                    JOIN MRCONSO c2 ON r.CUI2 = c2.CUI AND c2.SAB = r.SAB
+                    WHERE (r.CUI1 = %s AND r.CUI2 = %s) OR (r.CUI1 = %s AND r.CUI2 = %s)
+                    ORDER BY r.RELA, r.SAB
+                """
+                params = (cui1, cui2, cui2, cui1)
+            
+            await cursor.execute(query, params)
+            results = await cursor.fetchall()
+            
+            if not results:
+                return {
+                    "cui1": cui1,
+                    "cui2": cui2,
+                    "relationships": [],
+                    "message": f"No relationships found between {cui1} and {cui2}" + (f" in {sab}" if sab else "")
+                }
+            
+            # Convert results to list of dictionaries
+            relationships = []
+            for row in results:
+                relationships.append({
+                    "cui1": row["CUI1"],
+                    "cui2": row["CUI2"],
+                    "rel": row["REL"],
+                    "rela": row["RELA"],
+                    "sab": row["SAB"],
+                    "sl": row["SL"],
+                    "dir": row["DIR"],
+                    "suppress": row["SUPPRESS"],
+                    "cui1_name": row["CUI1_NAME"],
+                    "cui2_name": row["CUI2_NAME"]
+                })
+            
+            return {
+                "cui1": cui1,
+                "cui2": cui2,
+                "relationships": relationships,
+                "count": len(relationships)
+            }
+            
+    except Exception as e:
+        logging.error(f"Error getting relationships: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if 'conn' in locals():
+            conn.close()
+
 @app.get("/cuis/{cui}/hpo", summary="Get HPO term and code from CUI")
 async def get_hpo_term(cui: str):
     """Get the HPO term and code associated with a given CUI."""
