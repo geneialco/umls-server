@@ -407,9 +407,9 @@ async def get_relationships(cui1: str, cui2: str, sab: str = Query(None, descrip
                     SELECT r.CUI1, r.CUI2, r.REL, r.RELA, r.SAB, r.SL, r.DIR, r.SUPPRESS,
                            c1.STR as CUI1_NAME, c2.STR as CUI2_NAME
                     FROM MRREL r
-                    JOIN MRCONSO c1 ON r.CUI1 = c1.CUI AND c1.SAB = r.SAB
-                    JOIN MRCONSO c2 ON r.CUI2 = c2.CUI AND c2.SAB = r.SAB
-                    WHERE (r.CUI1 = %s AND r.CUI2 = %s) OR (r.CUI1 = %s AND r.CUI2 = %s)
+                    JOIN MRCONSO c1 ON r.CUI1 = c1.CUI
+                    JOIN MRCONSO c2 ON r.CUI2 = c2.CUI
+                    WHERE ((r.CUI1 = %s AND r.CUI2 = %s) OR (r.CUI1 = %s AND r.CUI2 = %s))
                     AND r.SAB = %s
                     ORDER BY r.RELA, r.SAB
                 """
@@ -419,8 +419,8 @@ async def get_relationships(cui1: str, cui2: str, sab: str = Query(None, descrip
                     SELECT r.CUI1, r.CUI2, r.REL, r.RELA, r.SAB, r.SL, r.DIR, r.SUPPRESS,
                            c1.STR as CUI1_NAME, c2.STR as CUI2_NAME
                     FROM MRREL r
-                    JOIN MRCONSO c1 ON r.CUI1 = c1.CUI AND c1.SAB = r.SAB
-                    JOIN MRCONSO c2 ON r.CUI2 = c2.CUI AND c2.SAB = r.SAB
+                    JOIN MRCONSO c1 ON r.CUI1 = c1.CUI
+                    JOIN MRCONSO c2 ON r.CUI2 = c2.CUI
                     WHERE (r.CUI1 = %s AND r.CUI2 = %s) OR (r.CUI1 = %s AND r.CUI2 = %s)
                     ORDER BY r.RELA, r.SAB
                 """
