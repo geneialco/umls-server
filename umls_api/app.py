@@ -404,25 +404,27 @@ async def get_relationships(cui1: str, cui2: str, sab: str = Query(None, descrip
             # Build the query based on whether SAB is specified
             if sab:
                 query = """
-                    SELECT r.CUI1, r.CUI2, r.REL, r.RELA, r.SAB, r.SL, r.DIR, r.SUPPRESS,
+                    SELECT DISTINCT r.CUI1, r.CUI2, r.REL, r.RELA, r.SAB, r.SL, r.DIR, r.SUPPRESS,
                            c1.STR as CUI1_NAME, c2.STR as CUI2_NAME
                     FROM MRREL r
-                    JOIN MRCONSO c1 ON r.CUI1 = c1.CUI
-                    JOIN MRCONSO c2 ON r.CUI2 = c2.CUI
+                    JOIN MRCONSO c1 ON r.CUI1 = c1.CUI AND c1.LAT = 'ENG'
+                    JOIN MRCONSO c2 ON r.CUI2 = c2.CUI AND c2.LAT = 'ENG'
                     WHERE ((r.CUI1 = %s AND r.CUI2 = %s) OR (r.CUI1 = %s AND r.CUI2 = %s))
                     AND r.SAB = %s
                     ORDER BY r.RELA, r.SAB
+                    LIMIT 50
                 """
                 params = (cui1, cui2, cui2, cui1, sab)
             else:
                 query = """
-                    SELECT r.CUI1, r.CUI2, r.REL, r.RELA, r.SAB, r.SL, r.DIR, r.SUPPRESS,
+                    SELECT DISTINCT r.CUI1, r.CUI2, r.REL, r.RELA, r.SAB, r.SL, r.DIR, r.SUPPRESS,
                            c1.STR as CUI1_NAME, c2.STR as CUI2_NAME
                     FROM MRREL r
-                    JOIN MRCONSO c1 ON r.CUI1 = c1.CUI
-                    JOIN MRCONSO c2 ON r.CUI2 = c2.CUI
+                    JOIN MRCONSO c1 ON r.CUI1 = c1.CUI AND c1.LAT = 'ENG'
+                    JOIN MRCONSO c2 ON r.CUI2 = c2.CUI AND c2.LAT = 'ENG'
                     WHERE (r.CUI1 = %s AND r.CUI2 = %s) OR (r.CUI1 = %s AND r.CUI2 = %s)
                     ORDER BY r.RELA, r.SAB
+                    LIMIT 50
                 """
                 params = (cui1, cui2, cui2, cui1)
             
@@ -462,6 +464,122 @@ async def get_relationships(cui1: str, cui2: str, sab: str = Query(None, descrip
             
     except Exception as e:
         logging.error(f"Error getting relationships: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if 'conn' in locals():
+            conn.close()
+
+@app.get("/cuis/{cui1}/{cui2}/relationships/indirect", summary="Get indirect relationships between two CUIs")
+async def get_indirect_relationships(cui1: str, cui2: str, max_depth: int = Query(2, description="Maximum path length to search (1-3 recommended)"), sab: str = Query(None, description="Source vocabulary filter")):
+    """Get indirect relationships between two CUIs by finding paths through intermediate concepts."""
+    try:
+        conn = await connect_db()
+        async with conn.cursor() as cursor:
+            # Build the base query with optional SAB filter
+            sab_filter = "AND r.SAB = %s" if sab else ""
+            sab_param = (sab,) if sab else ()
+            
+            # Step 1: Get all concepts that CUI1 relates to (limited to 50 for performance)
+            query1 = f"""
+                SELECT DISTINCT r.CUI2 as related_cui, r.REL, r.RELA, r.SAB
+                FROM MRREL r
+                WHERE r.CUI1 = %s {sab_filter}
+                ORDER BY r.RELA, r.SAB
+                LIMIT 50
+            """
+            params1 = (cui1,) + sab_param
+            await cursor.execute(query1, params1)
+            cui1_related = await cursor.fetchall()
+            
+            # Step 2: Get all concepts that relate to CUI2 (limited to 50 for performance)
+            query2 = f"""
+                SELECT DISTINCT r.CUI1 as related_cui, r.REL, r.RELA, r.SAB
+                FROM MRREL r
+                WHERE r.CUI2 = %s {sab_filter}
+                ORDER BY r.RELA, r.SAB
+                LIMIT 50
+            """
+            params2 = (cui2,) + sab_param
+            await cursor.execute(query2, params2)
+            cui2_related = await cursor.fetchall()
+            
+            # Step 3: Find common intermediate concepts
+            cui1_related_set = {row["related_cui"] for row in cui1_related}
+            cui2_related_set = {row["related_cui"] for row in cui2_related}
+            common_intermediates = cui1_related_set & cui2_related_set
+            
+            if not common_intermediates:
+                return {
+                    "cui1": cui1,
+                    "cui2": cui2,
+                    "indirect_relationships": [],
+                    "message": f"No indirect relationships found between {cui1} and {cui2} through intermediate concepts" + (f" in {sab}" if sab else "")
+                }
+            
+            # Step 4: Build paths through common intermediates (limit to first 10)
+            indirect_paths = []
+            for intermediate in list(common_intermediates)[:10]:  # Limit to first 10 to avoid overwhelming results
+                # Find the relationship from CUI1 to intermediate
+                cui1_to_intermediate = None
+                for row in cui1_related:
+                    if row["related_cui"] == intermediate:
+                        cui1_to_intermediate = row
+                        break
+                
+                # Find the relationship from intermediate to CUI2
+                intermediate_to_cui2 = None
+                for row in cui2_related:
+                    if row["related_cui"] == intermediate:
+                        intermediate_to_cui2 = row
+                        break
+                
+                if cui1_to_intermediate and intermediate_to_cui2:
+                    # Get concept names in a single query
+                    await cursor.execute("""
+                        SELECT CUI, STR FROM MRCONSO 
+                        WHERE CUI IN (%s, %s, %s) AND LAT = 'ENG'
+                        ORDER BY CUI
+                    """, (cui1, intermediate, cui2))
+                    names_result = await cursor.fetchall()
+                    
+                    # Create a name lookup
+                    name_lookup = {row["CUI"]: row["STR"] for row in names_result}
+                    
+                    indirect_paths.append({
+                        "path": f"{cui1} → {intermediate} → {cui2}",
+                        "intermediate_cui": intermediate,
+                        "intermediate_name": name_lookup.get(intermediate, intermediate),
+                        "step1": {
+                            "from": cui1,
+                            "to": intermediate,
+                            "rel": cui1_to_intermediate["REL"],
+                            "rela": cui1_to_intermediate["RELA"],
+                            "sab": cui1_to_intermediate["SAB"],
+                            "from_name": name_lookup.get(cui1, cui1),
+                            "to_name": name_lookup.get(intermediate, intermediate)
+                        },
+                        "step2": {
+                            "from": intermediate,
+                            "to": cui2,
+                            "rel": intermediate_to_cui2["REL"],
+                            "rela": intermediate_to_cui2["RELA"],
+                            "sab": intermediate_to_cui2["SAB"],
+                            "from_name": name_lookup.get(intermediate, intermediate),
+                            "to_name": name_lookup.get(cui2, cui2)
+                        }
+                    })
+            
+            return {
+                "cui1": cui1,
+                "cui2": cui2,
+                "indirect_relationships": indirect_paths,
+                "count": len(indirect_paths),
+                "max_depth": max_depth,
+                "common_intermediates_found": len(common_intermediates)
+            }
+            
+    except Exception as e:
+        logging.error(f"Error getting indirect relationships: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if 'conn' in locals():
