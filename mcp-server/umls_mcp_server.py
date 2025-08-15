@@ -46,7 +46,11 @@ async def call_umls_api(endpoint: str, params: Dict[str, Any] = None, timeout: f
     """Call the UMLS API with the given endpoint and parameters."""
     url = f"{UMLS_API_URL}{endpoint}"
     
-    logger.info(f"Calling UMLS API: {url} with params: {params}")
+    # Use extended timeout for relationship endpoints
+    if "relationships" in endpoint:
+        timeout = EXTENDED_TIMEOUT
+    
+    logger.info(f"Calling UMLS API: {url} with params: {params} (timeout: {timeout}s)")
     
     async with httpx.AsyncClient(timeout=timeout) as client:
         try:
@@ -190,6 +194,55 @@ async def list_tools():
                 },
                 "required": ["cui"]
             }
+        ),
+        Tool(
+            name="get_relationships",
+            description="Get direct relationships between two CUIs from the MRREL table",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "cui1": {
+                        "type": "string",
+                        "description": "First CUI identifier"
+                    },
+                    "cui2": {
+                        "type": "string",
+                        "description": "Second CUI identifier"
+                    },
+                    "sab": {
+                        "type": "string",
+                        "description": "Source vocabulary filter (e.g., 'SNOMEDCT_US', 'HPO'). Optional."
+                    }
+                },
+                "required": ["cui1", "cui2"]
+            }
+        ),
+        Tool(
+            name="get_indirect_relationships",
+            description="Get indirect relationships between two CUIs through intermediate concepts",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "cui1": {
+                        "type": "string",
+                        "description": "First CUI identifier"
+                    },
+                    "cui2": {
+                        "type": "string",
+                        "description": "Second CUI identifier"
+                    },
+                    "max_depth": {
+                        "type": "integer",
+                        "description": "Maximum path length to search (1-3 recommended)",
+                        "default": 2
+                    },
+                    "sab": {
+                        "type": "string",
+                        "description": "Source vocabulary filter (e.g., 'SNOMEDCT_US', 'HPO'). Optional."
+                    }
+                },
+                "required": ["cui1", "cui2"]
+            }
         )
     ]
     return tools
@@ -320,6 +373,92 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> Any:
                     text=f"HPO Information for CUI {cui}:\n" +
                          f"• HPO Code: {result['hpo_code']}\n" +
                          f"• HPO Term: {result['hpo_term']}"
+                ).model_dump()
+            ]
+            
+        elif name == "get_relationships":
+            cui1 = arguments["cui1"]
+            cui2 = arguments["cui2"]
+            sab = arguments.get("sab")
+            
+            params = {}
+            if sab:
+                params["sab"] = sab
+            
+            result = await call_umls_api(f"/cuis/{cui1}/{cui2}/relationships", params, timeout=EXTENDED_TIMEOUT)
+            
+            relationships = result.get('relationships', [])
+            if not relationships:
+                return [
+                    TextContent(
+                        type="text",
+                        text=f"No direct relationships found between CUIs {cui1} and {cui2}" + 
+                             (f" in {sab}" if sab else "")
+                    ).model_dump()
+                ]
+            
+            relationship_text = f"Found {len(relationships)} direct relationships between CUIs {cui1} and {cui2}:\n\n"
+            for i, rel in enumerate(relationships, 1):
+                relationship_text += f"{i}. {rel['cui1_name']} → {rel['cui2_name']}\n"
+                relationship_text += f"   Relationship: {rel['rel']}"
+                if rel.get('rela'):
+                    relationship_text += f" ({rel['rela']})"
+                relationship_text += f"\n   Source: {rel['sab']}\n\n"
+            
+            return [
+                TextContent(
+                    type="text",
+                    text=relationship_text
+                ).model_dump()
+            ]
+            
+        elif name == "get_indirect_relationships":
+            cui1 = arguments["cui1"]
+            cui2 = arguments["cui2"]
+            max_depth = arguments.get("max_depth", 2)
+            sab = arguments.get("sab")
+            
+            params = {"max_depth": max_depth}
+            if sab:
+                params["sab"] = sab
+            
+            result = await call_umls_api(f"/cuis/{cui1}/{cui2}/relationships/indirect", params, timeout=EXTENDED_TIMEOUT)
+            
+            indirect_rels = result.get('indirect_relationships', [])
+            if not indirect_rels:
+                return [
+                    TextContent(
+                        type="text",
+                        text=f"No indirect relationships found between CUIs {cui1} and {cui2} through intermediate concepts" + 
+                             (f" in {sab}" if sab else "")
+                    ).model_dump()
+                ]
+            
+            indirect_text = f"Found {len(indirect_rels)} indirect relationship paths between CUIs {cui1} and {cui2}:\n\n"
+            for i, path in enumerate(indirect_rels, 1):
+                indirect_text += f"{i}. Path: {path['path']}\n"
+                indirect_text += f"   Intermediate: {path['intermediate_name']} ({path['intermediate_cui']})\n"
+                
+                # Step 1
+                step1 = path['step1']
+                indirect_text += f"   Step 1: {step1['from_name']} → {step1['to_name']}\n"
+                indirect_text += f"           Relationship: {step1['rel']}"
+                if step1.get('rela'):
+                    indirect_text += f" ({step1['rela']})"
+                indirect_text += f" (Source: {step1['sab']})\n"
+                
+                # Step 2
+                step2 = path['step2']
+                indirect_text += f"   Step 2: {step2['from_name']} → {step2['to_name']}\n"
+                indirect_text += f"           Relationship: {step2['rel']}"
+                if step2.get('rela'):
+                    indirect_text += f" ({step2['rela']})"
+                indirect_text += f" (Source: {step2['sab']})\n\n"
+            
+            return [
+                TextContent(
+                    type="text",
+                    text=indirect_text
                 ).model_dump()
             ]
             
