@@ -8,9 +8,9 @@
     "5. Restart Claude Desktop after making changes"
   ],
   "_examples": {
-    "macOS": "/Users/username/miniconda3/envs/umls-server/bin/python",
-    "Linux": "/home/username/miniconda3/envs/umls-server/bin/python",
-    "Windows": "C:\\Users\\username\\miniconda3\\envs\\umls-server\\python.exe"
+    "macOS": "/Users/user/miniconda3/envs/umls-server/bin/python",
+    "Linux": "/home/user/miniconda3/envs/umls-server/bin/python",
+    "Windows": "C:\\Users\\user\\miniconda3\\envs\\umls-server\\python.exe"
   },
   "mcpServers": {
     "umls-server": {
