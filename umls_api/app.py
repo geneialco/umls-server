@@ -77,6 +77,7 @@ async def get_cui_from_hpo(hpo_code: str):
                 FROM MRCONSO 
                 WHERE CODE = %s 
                 AND SAB = 'HPO' 
+                AND LAT = 'ENG'
                 LIMIT 1
             """, (hpo_code,))
             result = await cursor.fetchone()
@@ -110,6 +111,7 @@ async def search_terms(search: str, ontology: str = "HPO"):
                 LEFT JOIN MRDEF ON MRCONSO.CUI = MRDEF.CUI
                 WHERE MRCONSO.SAB = %s
                 AND MRCONSO.STR LIKE %s
+                AND MRCONSO.LAT = 'ENG'
                 LIMIT 10;
             """, (ontology, f"%{search}%"))
             results = await cursor.fetchall()
@@ -170,7 +172,7 @@ async def get_ancestors(cui: str):
             # Step 3: Map AUIs to CUIs using MRCONSO (filtered to SNOMEDCT_US)
             logging.info(f"Mapping {len(auis)} AUIs to CUIs from SNOMEDCT_US")
             await cursor.execute("""
-                SELECT DISTINCT AUI, CUI FROM MRCONSO WHERE AUI IN %s AND SAB = 'SNOMEDCT_US'
+                SELECT DISTINCT AUI, CUI FROM MRCONSO WHERE AUI IN %s AND SAB = 'SNOMEDCT_US' AND LAT = 'ENG'
             """, (tuple(auis),))
             mappings = await cursor.fetchall()
             logging.info(f"Found {len(mappings)} AUI to CUI mappings")
@@ -198,7 +200,7 @@ async def get_cui_info(cui: str):
             await cursor.execute("""
                 SELECT CUI, STR 
                 FROM MRCONSO 
-                WHERE CUI = %s AND SAB = 'SNOMEDCT_US'
+                WHERE CUI = %s AND SAB = 'SNOMEDCT_US' AND LAT = 'ENG'
                 LIMIT 1
             """, (cui,))
             result = await cursor.fetchone()
@@ -226,7 +228,7 @@ async def search_cui(query: str = Query(..., description="Search term for CUI lo
             await cursor.execute("""
                 SELECT CUI, STR 
                 FROM MRCONSO 
-                WHERE STR LIKE %s AND SAB = 'SNOMEDCT_US'
+                WHERE STR LIKE %s AND SAB = 'SNOMEDCT_US' AND LAT = 'ENG'
                 LIMIT 50
             """, (f"%{query}%",))
             results = await cursor.fetchall()
@@ -596,6 +598,7 @@ async def get_hpo_term(cui: str):
                 FROM MRCONSO 
                 WHERE CUI = %s 
                 AND SAB = 'HPO' 
+                AND LAT = 'ENG'
                 LIMIT 1
             """, (cui,))
             result = await cursor.fetchone()
