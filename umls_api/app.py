@@ -242,14 +242,14 @@ async def get_ancestors_snomed_only(cui: str):
 
 @app.get("/cuis/{cui}", summary="Get details about a specific CUI")
 async def get_cui_info(cui: str):
-    """Get details about a given CUI."""
+    """Get details about a given CUI from all source vocabularies."""
     try:
         conn = await connect_db()
         async with conn.cursor() as cursor:
             await cursor.execute("""
                 SELECT CUI, STR 
                 FROM MRCONSO 
-                WHERE CUI = %s AND SAB = 'SNOMEDCT_US' AND LAT = 'ENG'
+                WHERE CUI = %s AND LAT = 'ENG'
                 LIMIT 1
             """, (cui,))
             result = await cursor.fetchone()
@@ -270,14 +270,14 @@ async def get_cui_info(cui: str):
 ## UMLS CUI toolkit
 @app.get("/cuis", summary="Search for CUIs by term")
 async def search_cui(query: str = Query(..., description="Search term for CUI lookup")):
-    """Search for CUIs matching a given term."""
+    """Search for CUIs matching a given term from all source vocabularies."""
     try:
         conn = await connect_db()
         async with conn.cursor() as cursor:
             await cursor.execute("""
                 SELECT CUI, STR 
                 FROM MRCONSO 
-                WHERE STR LIKE %s AND SAB = 'SNOMEDCT_US' AND LAT = 'ENG'
+                WHERE STR LIKE %s AND LAT = 'ENG'
                 LIMIT 50
             """, (f"%{query}%",))
             results = await cursor.fetchall()
