@@ -605,7 +605,7 @@ Description=UMLS API Service
 After=network.target
 
 [Service]
-User=your_user
+User=developer
 WorkingDirectory=/path/to/umls_api
 ExecStart=/path/to/conda/envs/umls-server/bin/uvicorn app:app --host 0.0.0.0 --port 8000
 Restart=always

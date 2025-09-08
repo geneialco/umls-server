@@ -151,9 +151,9 @@ Example configuration for different setups:
 {
   "mcpServers": {
     "umls-server": {
-      "command": "/Users/username/miniconda3/envs/umls-server/bin/python",
+      "command": "/Users/user/miniconda3/envs/umls-server/bin/python",
       "args": [
-        "/Users/username/projects/umls-server/mcp-server/umls_mcp_server.py"
+        "/Users/user/projects/umls-server/mcp-server/umls_mcp_server.py"
       ],
       "env": {
         "UMLS_API_URL": "http://localhost:8000"
