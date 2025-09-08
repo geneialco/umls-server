@@ -143,13 +143,13 @@ async def search_terms(search: str, ontology: str = "HPO"):
 
 @app.get("/cuis/{cui}/ancestors", summary="Get all ancestors of a CUI")
 async def get_ancestors(cui: str):
-    """ Retrieve all ancestors of a CUI by extracting AUIs from MRHIER.PTR and mapping them to CUIs via MRCONSO. """
+    """ Retrieve all ancestors of a CUI by extracting AUIs from MRHIER.PTR and mapping them to CUIs via MRCONSO from all source vocabularies. """
     try:
         conn = await connect_db()
         async with conn.cursor() as cursor:
-            # Step 1: Retrieve the AUI paths (PTR) from MRHIER using SNOMEDCT_US
-            logging.info(f"Fetching PTR paths for CUI {cui} from SNOMEDCT_US")
-            await cursor.execute("SELECT PTR FROM MRHIER WHERE CUI = %s AND SAB = 'SNOMEDCT_US'", (cui,))
+            # Step 1: Retrieve the AUI paths (PTR) from MRHIER from all source vocabularies
+            logging.info(f"Fetching PTR paths for CUI {cui} from all source vocabularies")
+            await cursor.execute("SELECT PTR FROM MRHIER WHERE CUI = %s", (cui,))
             results = await cursor.fetchall()
             logging.info(f"Found {len(results)} PTR paths for CUI {cui}")
 
@@ -169,10 +169,10 @@ async def get_ancestors(cui: str):
                 logging.info(f"No AUIs found in PTR paths for CUI {cui}")
                 return {"cui": cui, "ancestors": []}  # No ancestors found
 
-            # Step 3: Map AUIs to CUIs using MRCONSO (filtered to SNOMEDCT_US)
-            logging.info(f"Mapping {len(auis)} AUIs to CUIs from SNOMEDCT_US")
+            # Step 3: Map AUIs to CUIs using MRCONSO from all source vocabularies (English only)
+            logging.info(f"Mapping {len(auis)} AUIs to CUIs from all source vocabularies")
             await cursor.execute("""
-                SELECT DISTINCT AUI, CUI FROM MRCONSO WHERE AUI IN %s AND SAB = 'SNOMEDCT_US' AND LAT = 'ENG'
+                SELECT DISTINCT AUI, CUI FROM MRCONSO WHERE AUI IN %s AND LAT = 'ENG'
             """, (tuple(auis),))
             mappings = await cursor.fetchall()
             logging.info(f"Found {len(mappings)} AUI to CUI mappings")
@@ -186,6 +186,55 @@ async def get_ancestors(cui: str):
 
     except Exception as e:
         logging.error(f"Error getting ancestors: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if 'conn' in locals():
+            conn.close()
+
+async def get_ancestors_snomed_only(cui: str):
+    """ Retrieve all ancestors of a CUI from SNOMED-CT only for hierarchical calculations. """
+    try:
+        conn = await connect_db()
+        async with conn.cursor() as cursor:
+            # Step 1: Retrieve the AUI paths (PTR) from MRHIER using SNOMEDCT_US only
+            logging.info(f"Fetching PTR paths for CUI {cui} from SNOMEDCT_US only")
+            await cursor.execute("SELECT PTR FROM MRHIER WHERE CUI = %s AND SAB = 'SNOMEDCT_US'", (cui,))
+            results = await cursor.fetchall()
+            logging.info(f"Found {len(results)} PTR paths for CUI {cui} in SNOMEDCT_US")
+
+            if not results:
+                logging.info(f"No SNOMED-CT ancestors found for CUI {cui}")
+                return {"cui": cui, "ancestors": []}  # No ancestors found
+
+            # Step 2: Extract AUIs from PTR and map them to CUIs
+            auis = set()
+            for row in results:
+                ptr_path = row["PTR"]
+                if ptr_path:
+                    auis.update(ptr_path.split("."))  # Extract AUIs from dot-separated paths
+            logging.info(f"Extracted {len(auis)} unique AUIs from PTR paths")
+
+            if not auis:
+                logging.info(f"No AUIs found in PTR paths for CUI {cui}")
+                return {"cui": cui, "ancestors": []}  # No ancestors found
+
+            # Step 3: Map AUIs to CUIs using MRCONSO (filtered to SNOMEDCT_US only)
+            logging.info(f"Mapping {len(auis)} AUIs to CUIs from SNOMEDCT_US only")
+            await cursor.execute("""
+                SELECT DISTINCT AUI, CUI FROM MRCONSO WHERE AUI IN %s AND SAB = 'SNOMEDCT_US' AND LAT = 'ENG'
+            """, (tuple(auis),))
+            mappings = await cursor.fetchall()
+            logging.info(f"Found {len(mappings)} AUI to CUI mappings in SNOMEDCT_US")
+
+            # Convert AUIs to CUIs
+            aui_to_cui = {m["AUI"]: m["CUI"] for m in mappings}
+            ancestors_cuis = {aui_to_cui[aui] for aui in auis if aui in aui_to_cui}
+            logging.info(f"Found {len(ancestors_cuis)} unique SNOMED-CT ancestor CUIs")
+
+            return {"cui": cui, "ancestors": list(ancestors_cuis)}
+
+    except Exception as e:
+        logging.error(f"Error getting SNOMED-CT ancestors: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if 'conn' in locals():
@@ -273,7 +322,7 @@ async def get_depth(cui: str):
 
 @app.get("/cuis/{cui1}/{cui2}/similarity/wu-palmer", summary="Compute Wu-Palmer similarity")
 async def wu_palmer_similarity(cui1: str, cui2: str):
-    """Compute Wu-Palmer similarity between two CUIs using MRHIER and the fetch_depth helper."""
+    """Compute Wu-Palmer similarity between two CUIs using SNOMED-CT hierarchy only."""
     logging.info("Computing Wu-Palmer similarity for %s and %s", cui1, cui2)
 
     # Get the lowest common ancestor asynchronously.
@@ -320,12 +369,12 @@ async def wu_palmer_similarity(cui1: str, cui2: str):
 
 @app.get("/cuis/{cui1}/{cui2}/lca", summary="Get the lowest common ancestor of two CUIs")
 async def find_lowest_common_ancestor(cui1: str, cui2: str):
-    """Find the lowest common ancestor (LCA) of two CUIs using the new depth functions."""
+    """Find the lowest common ancestor (LCA) of two CUIs using SNOMED-CT hierarchy only."""
     logging.info("Fetching ancestors for %s and %s", cui1, cui2)
     try:
-        # Get ancestors for each CUI
-        ancestors1_response = await get_ancestors(cui1)
-        ancestors2_response = await get_ancestors(cui2)
+        # Get ancestors for each CUI from SNOMED-CT only
+        ancestors1_response = await get_ancestors_snomed_only(cui1)
+        ancestors2_response = await get_ancestors_snomed_only(cui2)
         
         ancestors1 = set(ancestors1_response.get("ancestors", []))
         ancestors2 = set(ancestors2_response.get("ancestors", []))
