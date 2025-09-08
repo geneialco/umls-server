@@ -79,7 +79,7 @@ async def process_intent(intent: str, parameters: Dict[str, Any]) -> Dict[str, A
     logger.info(f"Processing intent: {intent} with parameters: {parameters}")
     
     # Set a longer timeout for complex operations like Wu-Palmer similarity
-    timeout = 600.0 if intent in ["wu_palmer_similarity", "find_lca"] else 30.0
+    timeout = 600.0 if intent in ["wu_palmer_similarity", "find_lca", "get_relationships", "get_indirect_relationships"] else 30.0
     
     async with httpx.AsyncClient(timeout=timeout) as client:
         try:
@@ -127,6 +127,8 @@ Available intents:
 - find_lca: Get the lowest common ancestor of two CUIs
 - wu_palmer_similarity: Compute Wu-Palmer similarity between two CUIs
 - get_hpo_term: Get the HPO term and code for a given CUI
+- get_relationships: Get direct relationships between two CUIs
+- get_indirect_relationships: Get indirect relationships between two CUIs through intermediate concepts
 
 For each query, you should:
 1. Identify the most appropriate intent
@@ -148,6 +150,15 @@ Response: {"intent": "get_hpo_term", "parameters": {"cui": "C0011849"}}
 
 User: "Search for asthma in HPO"
 Response: {"intent": "search_terms", "parameters": {"search": "asthma", "ontology": "HPO"}}
+
+User: "What are the relationships between CUI C0011849 and C0011860?"
+Response: {"intent": "get_relationships", "parameters": {"cui1": "C0011849", "cui2": "C0011860"}}
+
+User: "What are the indirect relationships between CUI C0011849 and C0011860?"
+Response: {"intent": "get_indirect_relationships", "parameters": {"cui1": "C0011849", "cui2": "C0011860"}}
+
+User: "What are the relationships between CUI C0011849 and C0011860 in SNOMEDCT_US?"
+Response: {"intent": "get_relationships", "parameters": {"cui1": "C0011849", "cui2": "C0011860", "sab": "SNOMEDCT_US"}}
 
 Always respond with a valid JSON object containing the intent and parameters."""
 
@@ -333,6 +344,51 @@ def format_response_for_user(intent: str, result: Any) -> str:
     
     elif intent == "get_hpo_term":
         return f"The HPO term for CUI {result['cui']} is '{result['hpo_term']}' with code {result['hpo_code']}."
+    
+    elif intent == "get_relationships":
+        if not result.get("relationships"):
+            return f"No direct relationships found between CUIs {result['cui1']} and {result['cui2']}."
+        
+        relationships = result["relationships"]
+        response = f"I found {len(relationships)} direct relationships between CUIs {result['cui1']} and {result['cui2']}:\n\n"
+        
+        for i, rel in enumerate(relationships, 1):
+            response += f"{i}. {rel['cui1_name']} → {rel['cui2_name']}\n"
+            response += f"   Relationship: {rel['rel']}"
+            if rel.get('rela'):
+                response += f" ({rel['rela']})"
+            response += f"\n   Source: {rel['sab']}\n\n"
+        
+        return response
+    
+    elif intent == "get_indirect_relationships":
+        if not result.get("indirect_relationships"):
+            return f"No indirect relationships found between CUIs {result['cui1']} and {result['cui2']}."
+        
+        indirect_rels = result["indirect_relationships"]
+        response = f"I found {len(indirect_rels)} indirect relationship paths between CUIs {result['cui1']} and {result['cui2']}:\n\n"
+        
+        for i, path in enumerate(indirect_rels, 1):
+            response += f"{i}. Path: {path['path']}\n"
+            response += f"   Intermediate: {path['intermediate_name']} ({path['intermediate_cui']})\n"
+            
+            # Step 1
+            step1 = path['step1']
+            response += f"   Step 1: {step1['from_name']} → {step1['to_name']}\n"
+            response += f"           Relationship: {step1['rel']}"
+            if step1.get('rela'):
+                response += f" ({step1['rela']})"
+            response += f" (Source: {step1['sab']})\n"
+            
+            # Step 2
+            step2 = path['step2']
+            response += f"   Step 2: {step2['from_name']} → {step2['to_name']}\n"
+            response += f"           Relationship: {step2['rel']}"
+            if step2.get('rela'):
+                response += f" ({step2['rela']})"
+            response += f" (Source: {step2['sab']})\n\n"
+        
+        return response
     
     else:
         return f"Received response for intent '{intent}': {json.dumps(result, indent=2)}"
