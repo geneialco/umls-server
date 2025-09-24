@@ -667,3 +667,101 @@ async def get_hpo_term(cui: str):
         "hpo_term": result["STR"],
         "hpo_code": result["CODE"]
     }
+
+@app.get("/cuis/{cui}/mondo", summary="Get MONDO term and code from CUI")
+async def get_mondo_term(cui: str):
+    """Get the MONDO term and code associated with a given CUI."""
+    try:
+        conn = await connect_db()
+        async with conn.cursor() as cursor:
+            await cursor.execute("""
+                SELECT STR, CODE 
+                FROM MRCONSO 
+                WHERE CUI = %s 
+                AND SAB = 'MONDO' 
+                LIMIT 1
+            """, (cui,))
+            result = await cursor.fetchone()
+
+    except Exception as e:
+        logging.error(f"Error getting MONDO term: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if 'conn' in locals():
+            conn.close()
+
+    if not result:
+        raise HTTPException(status_code=404, detail="MONDO term not found for the given CUI")
+    
+    return {
+        "cui": cui,
+        "mondo_term": result["STR"],
+        "mondo_code": result["CODE"]
+    }
+
+
+
+@app.get("/terms/{term}/mondo", summary="Get MONDO code by term")
+async def get_mondo_by_term(term: str):
+    """Get MONDO code by term (fallback: via CUI)."""
+    try:
+        conn = await connect_db()
+        async with conn.cursor(aiomysql.DictCursor) as cursor:
+
+            # Step 1: using term find MONDO
+            await cursor.execute("""
+                SELECT CODE, STR 
+                FROM MRCONSO 
+                WHERE STR LIKE %s AND SAB = 'MONDO'
+                LIMIT 10
+            """, (term,))
+            mondo_result = await cursor.fetchone()
+
+            if mondo_result:
+                return {
+                    "query_term": term,
+                    "mondo_term": mondo_result["STR"],
+                    "mondo_code": mondo_result["CODE"],
+                    "via": "direct term→MONDO"
+                }
+
+            # Step 2: term → CUI
+            await cursor.execute("""
+                SELECT CUI 
+                FROM MRCONSO 
+                WHERE STR = %s 
+                LIMIT 10
+            """, (term,))
+            cui_result = await cursor.fetchone()
+
+            if not cui_result:
+                raise HTTPException(status_code=404, detail="Term not found in UMLS")
+
+            cui = cui_result["CUI"]
+
+            # Step 3: CUI → MONDO
+            await cursor.execute("""
+                SELECT CODE, STR 
+                FROM MRCONSO 
+                WHERE CUI = %s AND SAB = 'MONDO'
+                LIMIT 10
+            """, (cui,))
+            mondo_from_cui = await cursor.fetchone()
+
+            if not mondo_from_cui:
+                raise HTTPException(status_code=404, detail="No MONDO mapping found for this term")
+
+            return {
+                "query_term": term,
+                "cui": cui,
+                "mondo_term": mondo_from_cui["STR"],
+                "mondo_code": mondo_from_cui["CODE"],
+                "via": "term→CUI→MONDO"
+            }
+
+    except Exception as e:
+        logging.error(f"Error in get_mondo_by_term: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if 'conn' in locals():
+            conn.close()
