@@ -337,8 +337,9 @@ The MCP server provides these tools to Claude Desktop:
   
    in order to put the SQL data into our dataset, first open docker SQL server
   
-   ```cd ~/umls-server
-      docker compose up -d
+   ```
+   cd ~/umls-server
+   docker compose up -d
    ```
 
    Then run the SQL code
