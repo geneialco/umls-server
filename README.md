@@ -324,11 +324,17 @@ The MCP server provides these tools to Claude Desktop:
   ```bash./scripts/merge_mondo_umls.sh```
 - 4: The script only generates SQL, now we got the insert_mondo.sql file, we need to import it into the DB that already contains the UMLS schema:
    enter our umls-server repo root file
+  
    ```cd ~/umls-server```
+  
    copy the scripts/insert_mondo.sql into docker
+  
    ```docker cp scripts/insert_mondo.sql umls-mysql:/tmp/insert_mondo.sql```
+  
    put the SQL data into our dataset
+  
    ```docker exec -it umls-mysql bash -lc \ 'mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" < /tmp/insert_mondo.sql'```
+  
 - 5: Enter database add MONDO into the MRSAB table: ```docker exec -it umls-mysql```,  ```bash mysql -u root -p umls```
 copy this SQL code and run it:```INSERT INTO MRSAB (
   VSAB, RSAB, SON, SF, SVER,
