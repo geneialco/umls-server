@@ -320,7 +320,8 @@ The MCP server provides these tools to Claude Desktop:
 ##  Option: Add MONDO dataset and MONDO code searching API
 - 1: Download the MONDO json edition form this link: https://mondo.monarchinitiative.org/pages/download/
 - 2: Move the downloaded MONDO json file to our umls-server/script folder
-- 3: Run the loading script:```bash./scripts/merge_mondo_umls.sh```
+- 3: Run the loading script:
+  ```bash./scripts/merge_mondo_umls.sh```
 - 4: The script only generates SQL, now we got the insert_mondo.sql file, we need to import it into the DB that already contains the UMLS schema:
    enter our umls-server repo root file
    ```cd ~/umls-server```
