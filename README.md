@@ -331,9 +331,9 @@ The MCP server provides these tools to Claude Desktop:
   
    ```cd ~/umls-server```
   
-   copy the scripts/insert_mondo.sql into docker
+   copy the insert_mondo.sql into docker
   
-   ```docker cp scripts/insert_mondo.sql umls-mysql:/tmp/insert_mondo.sql```
+   ```docker cp insert_mondo.sql umls-mysql:/tmp/insert_mondo.sql```
   
    put the SQL data into our dataset
   
