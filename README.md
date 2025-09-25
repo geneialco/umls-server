@@ -337,6 +337,9 @@ The MCP server provides these tools to Claude Desktop:
   
    put the SQL data into our dataset
   
+   ```cd ~/umls-server
+      docker compose up -d```
+  
    ```docker exec -it umls-mysql bash -lc \ 'mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" < /tmp/insert_mondo.sql'```
   
 - 5: Enter database add MONDO into the MRSAB table:
