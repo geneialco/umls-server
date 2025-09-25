@@ -335,11 +335,12 @@ The MCP server provides these tools to Claude Desktop:
   
    ```docker cp insert_mondo.sql umls-mysql:/tmp/insert_mondo.sql```
   
-   put the SQL data into our dataset
+   in order to put the SQL data into our dataset, first open docker SQL server
   
    ```cd ~/umls-server
       docker compose up -d```
 
+   Then run the SQL code
   
    ```docker exec -it umls-mysql bash -lc \ 'mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" < /tmp/insert_mondo.sql'```
   
