@@ -384,11 +384,15 @@ INSERT INTO MRSAB (
 
 - 6: Verify the import, Check that MONDO rows were inserted into MRCONSO:
 
-   ```docker exec -it umls-mysql bash -lc \ 'mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" -e "SELECT CUI, CODE, STR FROM MRCONSO WHERE SAB=\"MONDO\" LIMIT 10;"'```
+   ```
+   docker exec -it umls-mysql bash -lc \ 'mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" -e "SELECT CUI, CODE, STR FROM MRCONSO WHERE SAB=\"MONDO\" LIMIT 10;"'
+   ```
 
 - 7: Restart the API
 
-  ```docker restart umls-api```
+  ```
+  docker restart umls-api
+  ```
   
 - 8: Now you can use our getting MONDO code API:
 
