@@ -317,7 +317,7 @@ The MCP server provides these tools to Claude Desktop:
 `GET /cuis/{cui}/hpo`
 - Retrieves the HPO term and its corresponding code associated with a given CUI.
 
-##  Option: Add MONDO dataset and MONDO code searching API
+##  Option: Add MONDO dataset and MONDO code searching API (For Docker setup)
 - 1: Download the MONDO json edition form this link: https://mondo.monarchinitiative.org/pages/download/
 - 2: Move the downloaded MONDO json file to our umls-server/script folder
 - 3: Run the loading script:
