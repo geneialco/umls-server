@@ -396,7 +396,8 @@ The MCP server provides these tools to Claude Desktop:
   ```
   
 - 8: Now you can use our getting MONDO code API:
-
+  | Method | Endpoint | Description |
+  |--------|----------|-------------|
   | `GET`  | `/cuis/{cui}/mondo` | Get MONDO term and code from CUI |
   | `GET`  | `/terms/{term}/mondo` | Get MONDO code by term |
 
