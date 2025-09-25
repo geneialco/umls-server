@@ -363,7 +363,8 @@ copy this SQL code and run it:
   'Y',                      
   'Imported MONDO ontology',
   'Source: MONDO release'
-);```
+);
+```
 
 
 - 6: Verify the import, Check that MONDO rows were inserted into MRCONSO:
