@@ -372,9 +372,13 @@ copy this SQL code and run it:
    ```docker exec -it umls-mysql bash -lc \ 'mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" -e "SELECT CUI, CODE, STR FROM MRCONSO WHERE SAB=\"MONDO\" LIMIT 10;"'```
 
 - 7: Restart the API
+
   ```docker restart umls-api```
+  
 - 8: Now you can use our getting MONDO code API:
+
   `GET /cuis/{cui}/mondo` -summary:Get MONDO term and code from CUI
+  
   `GET /terms/{term}/mondo` -summary:Get MONDO code by term
 
 ## 🏗️ UMLS Database Schema
