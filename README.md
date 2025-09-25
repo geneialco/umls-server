@@ -335,8 +335,14 @@ The MCP server provides these tools to Claude Desktop:
   
    ```docker exec -it umls-mysql bash -lc \ 'mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" < /tmp/insert_mondo.sql'```
   
-- 5: Enter database add MONDO into the MRSAB table: ```docker exec -it umls-mysql```,  ```bash mysql -u root -p umls```
-copy this SQL code and run it:```INSERT INTO MRSAB (
+- 5: Enter database add MONDO into the MRSAB table:
+  ```docker exec -it umls-mysql```
+  
+  ```bash mysql -u root -p umls```
+  
+copy this SQL code and run it:
+
+```INSERT INTO MRSAB (
   VSAB, RSAB, SON, SF, SVER,
   VSTART, VEND, IMETA, SRL,
   LAT, CENC, CURVER, SABIN,
@@ -361,7 +367,9 @@ copy this SQL code and run it:```INSERT INTO MRSAB (
 
 
 - 6: Verify the import, Check that MONDO rows were inserted into MRCONSO:
+
    ```docker exec -it umls-mysql bash -lc \ 'mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" -e "SELECT CUI, CODE, STR FROM MRCONSO WHERE SAB=\"MONDO\" LIMIT 10;"'```
+
 - 7: Restart the API
   ```docker restart umls-api```
 - 8: Now you can use our getting MONDO code API:
