@@ -321,7 +321,11 @@ The MCP server provides these tools to Claude Desktop:
 - 1: Download the MONDO json edition form this link: https://mondo.monarchinitiative.org/pages/download/
 - 2: Move the downloaded MONDO json file to our umls-server folder
 - 3: Run the loading script:
+
+  ```cd ~/umls-server```
+
   ```bash scripts/merge_mondo_umls.sh```
+  
 - 4: The script only generates SQL, now we got the insert_mondo.sql file, we need to import it into the DB that already contains the UMLS schema:
    enter our umls-server repo root file
   
