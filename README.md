@@ -342,16 +342,21 @@ The MCP server provides these tools to Claude Desktop:
    docker compose up -d
    ```
 
-   Then run the SQL code
+   Then run the SQL code, you need input the database password you set before
   
    ```
    docker exec -it umls-mysql bash -lc \ 'mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" < /tmp/insert_mondo.sql'
    ```
   
 - 5: Enter database add MONDO into the MRSAB table:
-  ```docker exec -it umls-mysql```
+
+  ```
+  docker exec -it umls-mysql
+  ```
   
-  ```bash mysql -u root -p umls```
+  ```
+  bash mysql -u root -p umls
+  ```
   
 copy this SQL code and run it:
 
