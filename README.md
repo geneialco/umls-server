@@ -350,9 +350,9 @@ The MCP server provides these tools to Claude Desktop:
   
 - 5: Enter database add MONDO into the MRSAB table:
 
-  ```
-docker exec -it umls-mysql mysql -u root -p umls
-  ```
+   ```
+   docker exec -it umls-mysql mysql -u root -p umls
+   ```
   
 copy this SQL code and run it:
 
