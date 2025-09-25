@@ -354,32 +354,32 @@ The MCP server provides these tools to Claude Desktop:
    docker exec -it umls-mysql mysql -u root -p umls
    ```
   
-copy this SQL code and run it:
+   copy this SQL code and run it:
 
-```
-INSERT INTO MRSAB (
-  VSAB, RSAB, SON, SF, SVER,
-  VSTART, VEND, IMETA, SRL,
-  LAT, CENC, CURVER, SABIN,
-  SSN, SCIT
-) VALUES (
-  'MONDO2025',
-  'MONDO',
-  'MONDO Disease Ontology',
-  'MONDO',
-  'v2025-01-01',
-  '20250101',
-  NULL,
-  '0',
-  0,
-  'ENG',
-  'NLM',
-  'Y',
-  'Y',
-  'Imported MONDO ontology',
-  'Source: MONDO release'
-);
-```
+   ```
+   INSERT INTO MRSAB (
+     VSAB, RSAB, SON, SF, SVER,
+     VSTART, VEND, IMETA, SRL,
+     LAT, CENC, CURVER, SABIN,
+     SSN, SCIT
+   ) VALUES (
+     'MONDO2025',
+     'MONDO',
+     'MONDO Disease Ontology',
+     'MONDO',
+     'v2025-01-01',
+     '20250101',
+     NULL,
+     '0',
+     0,
+     'ENG',
+     'NLM',
+     'Y',
+     'Y',
+     'Imported MONDO ontology',
+     'Source: MONDO release'
+   );
+   ```
 
 
 - 6: Verify the import, Check that MONDO rows were inserted into MRCONSO in SQL:
@@ -389,6 +389,7 @@ INSERT INTO MRSAB (
    ```
 
 - 7: Restart the API
+  Exit SQL first, then run this code in bash
 
   ```
   docker restart umls-api
