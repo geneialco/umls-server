@@ -317,6 +317,90 @@ The MCP server provides these tools to Claude Desktop:
 `GET /cuis/{cui}/hpo`
 - Retrieves the HPO term and its corresponding code associated with a given CUI.
 
+##  Option: Add MONDO dataset and MONDO code searching API (For Docker setup)
+- 1: Download the MONDO json edition form this link: https://mondo.monarchinitiative.org/pages/download/
+- 2: Move the downloaded MONDO json file to our umls-server folder
+- 3: Run the loading script:
+
+  ```cd ~/umls-server```
+
+  ```bash scripts/merge_mondo_umls.sh```
+  
+- 4: The script only generates SQL, now we got the insert_mondo.sql file, we need to import it into the DB that already contains the UMLS schema:
+   enter our umls-server repo root file
+  
+   ```cd ~/umls-server```
+  
+   copy the insert_mondo.sql into docker
+  
+   ```docker cp insert_mondo.sql umls-mysql:/tmp/insert_mondo.sql```
+  
+   in order to put the SQL data into our dataset, first open docker SQL server
+  
+   ```
+   cd ~/umls-server
+   docker compose up -d
+   ```
+
+   Then run the SQL code, you need input the database password you set before
+  
+   ```
+   docker exec -it umls-mysql bash -lc \ 'mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" < /tmp/insert_mondo.sql'
+   ```
+  
+- 5: Enter database add MONDO into the MRSAB table:
+
+   ```
+   docker exec -it umls-mysql mysql -u root -p umls
+   ```
+  
+   copy this SQL code and run it:
+
+   ```
+   INSERT INTO MRSAB (
+     VSAB, RSAB, SON, SF, SVER,
+     VSTART, VEND, IMETA, SRL,
+     LAT, CENC, CURVER, SABIN,
+     SSN, SCIT
+   ) VALUES (
+     'MONDO2025',
+     'MONDO',
+     'MONDO Disease Ontology',
+     'MONDO',
+     'v2025-01-01',
+     '20250101',
+     NULL,
+     '0',
+     0,
+     'ENG',
+     'NLM',
+     'Y',
+     'Y',
+     'Imported MONDO ontology',
+     'Source: MONDO release'
+   );
+   ```
+
+
+- 6: Verify the import, Check that MONDO rows were inserted into MRCONSO in SQL:
+
+   ```
+   SELECT CUI, CODE, STR FROM MRCONSO WHERE SAB='MONDO' LIMIT 10;
+   ```
+
+- 7: Restart the API
+  Exit SQL first, then run this code in bash
+
+  ```
+  docker restart umls-api
+  ```
+  
+- 8: Now you can use our getting MONDO code API:
+  | Method | Endpoint | Description |
+  |--------|----------|-------------|
+  | `GET`  | `/cuis/{cui}/mondo` | Get MONDO term and code from CUI |
+  | `GET`  | `/terms/{term}/mondo` | Get MONDO code by term |
+
 ## 🏗️ UMLS Database Schema
 
 The setup creates these main tables:
