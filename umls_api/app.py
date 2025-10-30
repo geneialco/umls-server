@@ -520,6 +520,116 @@ async def get_relationships(cui1: str, cui2: str, sab: str = Query(None, descrip
         if 'conn' in locals():
             conn.close()
 
+def _format_rxnorm_rows(rows):
+    """Format raw RxNorm rows to the desired output shape and deduplicate by code.
+
+    Each row is expected to have fields: CODE, STR, SAB, REL, RELA
+    """
+    if not rows:
+        return []
+    seen_codes = set()
+    formatted = []
+    for r in rows:
+        code = r.get("CODE")
+        if code in seen_codes:
+            continue
+        seen_codes.add(code)
+        relationship = r.get("RELA") or r.get("REL")
+        formatted.append({
+            "code": code,
+            "name": r.get("STR"),
+            "source": r.get("SAB", "RXNORM"),
+            "relationship": relationship
+        })
+    return formatted
+
+async def _fetch_rxnorm_meds_for_cui(conn, cui: str, rela_whitelist: list, limit: int):
+    """Fetch RxNorm medications related to a disease CUI via MRREL/MRCONSO.
+
+    Considers both directions (disease->drug and drug->disease). Filters to LAT='ENG' and SAB='RXNORM'.
+    """
+    placeholders = ",".join(["%s"] * len(rela_whitelist)) if rela_whitelist else None
+    params = []
+    async with conn.cursor(aiomysql.DictCursor) as cursor:
+        if rela_whitelist:
+            # Indications or constrained set
+            query = f"""
+                (
+                  SELECT r.REL, r.RELA, m.SAB, m.CODE, m.STR
+                  FROM MRREL r
+                  JOIN MRCONSO m ON m.CUI = r.CUI2 AND m.SAB = 'RXNORM' AND m.LAT = 'ENG'
+                  WHERE r.CUI1 = %s AND r.RELA IN ({placeholders})
+                )
+                UNION
+                (
+                  SELECT r.REL, r.RELA, m.SAB, m.CODE, m.STR
+                  FROM MRREL r
+                  JOIN MRCONSO m ON m.CUI = r.CUI1 AND m.SAB = 'RXNORM' AND m.LAT = 'ENG'
+                  WHERE r.CUI2 = %s AND r.RELA IN ({placeholders})
+                )
+                LIMIT %s
+            """
+            params = [cui] + rela_whitelist + [cui] + rela_whitelist + [limit]
+        else:
+            # Broader set without restricting RELA; still English and RxNorm
+            query = """
+                (
+                  SELECT r.REL, r.RELA, m.SAB, m.CODE, m.STR
+                  FROM MRREL r
+                  JOIN MRCONSO m ON m.CUI = r.CUI2 AND m.SAB = 'RXNORM' AND m.LAT = 'ENG'
+                  WHERE r.CUI1 = %s
+                )
+                UNION
+                (
+                  SELECT r.REL, r.RELA, m.SAB, m.CODE, m.STR
+                  FROM MRREL r
+                  JOIN MRCONSO m ON m.CUI = r.CUI1 AND m.SAB = 'RXNORM' AND m.LAT = 'ENG'
+                  WHERE r.CUI2 = %s
+                )
+                LIMIT %s
+            """
+            params = [cui, cui, limit]
+
+        await cursor.execute(query, params)
+        rows = await cursor.fetchall()
+        return _format_rxnorm_rows(rows)
+
+@app.get("/cuis/{cui}/medications/indications", summary="RxNorm medications indicated to treat a disease CUI")
+async def get_rxnorm_indications(cui: str, limit: int = Query(50, description="Max number of medications to return")):
+    """Return RxNorm medications that are indicated to treat the given disease CUI.
+
+    Filters RELA to common indication relations and enforces English-only names.
+    """
+    indication_relas = ["may_treat", "treats", "has_indication"]
+    try:
+        conn = await connect_db()
+        meds = await _fetch_rxnorm_meds_for_cui(conn, cui, indication_relas, limit)
+        return {"cui": cui, "medications": meds}
+    except Exception as e:
+        logging.error(f"Error fetching RxNorm indications: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if 'conn' in locals():
+            conn.close()
+
+@app.get("/cuis/{cui}/medications/related", summary="Broader RxNorm medications related to a disease CUI")
+async def get_rxnorm_related(cui: str, limit: int = Query(50, description="Max number of medications to return")):
+    """Return broader set of RxNorm medications related to the disease CUI.
+
+    Uses all relationships in MRREL between the disease CUI and RxNorm concepts, still English-only.
+    Clients can post-filter by relationship if needed.
+    """
+    try:
+        conn = await connect_db()
+        meds = await _fetch_rxnorm_meds_for_cui(conn, cui, rela_whitelist=None, limit=limit)
+        return {"cui": cui, "medications": meds}
+    except Exception as e:
+        logging.error(f"Error fetching related RxNorm medications: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if 'conn' in locals():
+            conn.close()
+
 @app.get("/cuis/{cui1}/{cui2}/relationships/indirect", summary="Get indirect relationships between two CUIs")
 async def get_indirect_relationships(cui1: str, cui2: str, max_depth: int = Query(2, description="Maximum path length to search (1-3 recommended)"), sab: str = Query(None, description="Source vocabulary filter")):
     """Get indirect relationships between two CUIs by finding paths through intermediate concepts."""

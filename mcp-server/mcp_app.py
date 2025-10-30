@@ -76,6 +76,16 @@ INTENT_MAPPINGS = {
         "endpoint": "/cuis/{cui1}/{cui2}/relationships/indirect",
         "method": "GET",
         "params": ["cui1", "cui2", "max_depth", "sab"]
+    },
+    "get_rxnorm_indications": {
+        "endpoint": "/cuis/{cui}/medications/indications",
+        "method": "GET",
+        "params": ["cui", "limit"]
+    },
+    "get_rxnorm_related": {
+        "endpoint": "/cuis/{cui}/medications/related",
+        "method": "GET",
+        "params": ["cui", "limit"]
     }
 }
 
