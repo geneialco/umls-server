@@ -264,6 +264,8 @@ The MCP server provides these tools to Claude Desktop:
 | `find_lowest_common_ancestor` | Find the lowest common ancestor (LCA) of two CUIs |
 | `wu_palmer_similarity` | Compute Wu-Palmer similarity between two CUIs |
 | `get_hpo_term` | Get HPO (Human Phenotype Ontology) term and code from a CUI |
+| `get_rxnorm_indications` | Get RxNorm medications indicated to treat a disease CUI |
+| `get_rxnorm_related` | Get broader RxNorm medications related to a disease CUI |
 
 ## 🌐 API Endpoints
 
