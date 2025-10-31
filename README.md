@@ -264,6 +264,8 @@ The MCP server provides these tools to Claude Desktop:
 | `find_lowest_common_ancestor` | Find the lowest common ancestor (LCA) of two CUIs |
 | `wu_palmer_similarity` | Compute Wu-Palmer similarity between two CUIs |
 | `get_hpo_term` | Get HPO (Human Phenotype Ontology) term and code from a CUI |
+| `get_rxnorm_indications` | Get RxNorm medications indicated to treat a disease CUI |
+| `get_rxnorm_related` | Get broader RxNorm medications related to a disease CUI |
 
 ## 🌐 API Endpoints
 
@@ -278,6 +280,8 @@ The MCP server provides these tools to Claude Desktop:
 | `GET`  | `/cuis/{cui1}/{cui2}/similarity/wu-palmer` | Compute Wu-Palmer similarity between two CUIs |
 | `GET`  | `/cuis/{cui}/hpo` | Retrieve HPO code from CUI |
 | `GET`  | `/hpo_to_cui/{hpo_code}` | Retrieve CUI from HPO code |
+| `GET`  | `/cuis/{cui}/medications/indications` | RxNorm medications indicated to treat the disease CUI |
+| `GET`  | `/cuis/{cui}/medications/related` | Broader RxNorm medications related to the disease CUI |
 
 ### Endpoint Descriptions
 
@@ -312,6 +316,24 @@ The MCP server provides these tools to Claude Desktop:
 #### Compute Wu-Palmer Similarity
 `GET /cuis/{cui1}/{cui2}/similarity/wu-palmer`
 - Computes Wu-Palmer similarity between two CUIs based on hierarchical depth.
+
+#### Retrieve RxNorm medications indicated to treat a disease
+`GET /cuis/{cui}/medications/indications`
+- Returns RxNorm medications with indication relations (e.g., `may_treat`, `treats`, `has_indication`).
+- Query params: `limit` (default: 50)
+- Example:
+```sh
+curl "http://localhost:8000/cuis/C0011860/medications/indications?limit=25"
+```
+
+#### Retrieve broader RxNorm medications related to a disease
+`GET /cuis/{cui}/medications/related`
+- Returns RxNorm medications via any relationship to the disease CUI.
+- Query params: `limit` (default: 50)
+- Example:
+```sh
+curl "http://localhost:8000/cuis/C0011860/medications/related?limit=25"
+```
 
 #### Find HPO from CUI term
 `GET /cuis/{cui}/hpo`

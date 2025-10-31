@@ -244,6 +244,31 @@ async def list_tools():
                 "required": ["cui1", "cui2"]
             }
         )
+        ,
+        Tool(
+            name="get_rxnorm_indications",
+            description="Get RxNorm medications indicated to treat a disease CUI",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "cui": {"type": "string", "description": "Disease CUI"},
+                    "limit": {"type": "integer", "description": "Max results", "default": 50}
+                },
+                "required": ["cui"]
+            }
+        ),
+        Tool(
+            name="get_rxnorm_related",
+            description="Get broader RxNorm medications related to a disease CUI",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "cui": {"type": "string", "description": "Disease CUI"},
+                    "limit": {"type": "integer", "description": "Max results", "default": 50}
+                },
+                "required": ["cui"]
+            }
+        )
     ]
     return tools
 
@@ -461,6 +486,26 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> Any:
                     text=indirect_text
                 ).model_dump()
             ]
+        
+        elif name == "get_rxnorm_indications":
+            cui = arguments["cui"]
+            limit = arguments.get("limit", 50)
+            result = await call_umls_api(f"/cuis/{cui}/medications/indications", {"limit": limit})
+            meds = result.get("medications", [])
+            if not meds:
+                return [TextContent(type="text", text=f"No indication medications found for CUI {cui}.").model_dump()]
+            lines = [f"• {m['code']} | {m['name']} | {m.get('source','RXNORM')} | {m.get('relationship','')}" for m in meds]
+            return [TextContent(type="text", text=f"Indication medications for {cui} (n={len(meds)}):\n\n" + "\n".join(lines)).model_dump()]
+        
+        elif name == "get_rxnorm_related":
+            cui = arguments["cui"]
+            limit = arguments.get("limit", 50)
+            result = await call_umls_api(f"/cuis/{cui}/medications/related", {"limit": limit})
+            meds = result.get("medications", [])
+            if not meds:
+                return [TextContent(type="text", text=f"No related medications found for CUI {cui}.").model_dump()]
+            lines = [f"• {m['code']} | {m['name']} | {m.get('source','RXNORM')} | {m.get('relationship','')}" for m in meds]
+            return [TextContent(type="text", text=f"Related medications for {cui} (n={len(meds)}):\n\n" + "\n".join(lines)).model_dump()]
             
         else:
             raise ValueError(f"Unknown tool: {name}")
